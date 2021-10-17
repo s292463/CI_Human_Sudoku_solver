@@ -8,18 +8,12 @@
 # %%
 import logging
 from copy import deepcopy
-from collections import deque, Counter
-from queue import PriorityQueue
-from typing import Deque
+from collections import deque
 import networkx as nx
-from itertools import chain, combinations
-import matplotlib.pyplot as plt
-from pprint import pprint
-from networkx.algorithms import components
-from networkx.algorithms.components import connected
+from itertools import combinations
 import numpy as np
 from functools import reduce
-from numpy.lib import union1d
+
 
 logging.basicConfig(format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%H:%M:%S', level=logging.INFO)
 
@@ -311,6 +305,8 @@ def my_solver(sudoku):
     # Used to track if the algorithm modifie the sudoku's structure
     global modified
     wrongGuess = False
+
+    expandedNodes = 0
     states = deque()
     all_cellsWithCandidates = sudoku_parser(sudoku)
 
@@ -360,6 +356,8 @@ def my_solver(sudoku):
             myGuessCandidate = myGuessCandidates[0]
             # Put the candidate inside the sudoku
             sudoku[myGuessCell[0][0], myGuessCell[0][1]] = myGuessCandidate
+            # Expand a node every guess
+            expandedNodes += 1
             # Save the state
             all_cellsWithCandidatesCopy = deepcopy(all_cellsWithCandidates)
             states.append((all_cellsWithCandidatesCopy, myGuessCandidates[1:-1]))
@@ -378,7 +376,7 @@ def my_solver(sudoku):
             continue 
 
     if valid_solution(sudoku):
-        print("Valid solution found")
+        print(f"Valid solution found with {expandedNodes} expanded nodes")
 
     return sudoku
 
