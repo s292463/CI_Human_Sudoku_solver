@@ -106,9 +106,10 @@ def sudoku_parser(sudoku:np.ndarray):
     return candidates_cells
 
 
-def subsetGenerator(completeSet):
+def subsetGenerator(completeSet, dimSet=None):
+    if dimSet == None: dimSet = range(2, len(completeSet)) 
 
-    for r in range(2, len(completeSet)):
+    for r in dimSet:
         for s in list(combinations(completeSet, r)):
             yield s
 
@@ -149,16 +150,74 @@ def findTuple(cellsWithCandidates, all_cellsWithCandidates):
 def getCellWithCandidate(collection: dict, num):
     return list(filter(lambda item : num in item[1] , collection.items()))
 
-def findSingleCandidate(sudoku:np.ndarray, collection:dict, all_cellsWithCandidates):
+def onSameCol(collection:dict):
+    return all(x[0][1] == collection[0][0][1] for x in collection)
 
-    for i in range(1, 10):
+def onSameRow(collection:dict):
+    return all(x[0][0] == collection[0][0][0] for x in collection)
+
+
+def removeFromCollection(collection, all_cellsWithCandidates: dict, numToRemove):
+
+    for cell in collection:
+        try:
+            all_cellsWithCandidates[cell[0]].remove(numToRemove)
+        except ValueError: 
+            pass
+
+def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
+    # Invert the loop of subset and the number one to optimize
+    
+    iter =  reduce(np.union1d, (box.values())).tolist() if len(box)>1 else box.values()
+    
+    for i in iter:
+
+        cells = getCellWithCandidate(box, i)
+
+        for s in subsetGenerator(cells, dimSet = [3,2]):
+            if s!=[]: # if len(s):
+                if onSameCol(s):
+                    reducedCol = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==s[0][0][1] and k not in [j[0] for j in s]}
+                    colCellsWithCandidates = getCellWithCandidate(reducedCol, i)
+
+                    if len(s) == len(cells):
+                        if len(colCellsWithCandidates) > 0:
+                            removeFromCollection(colCellsWithCandidates, all_cellsWithCandidates, i)
+                        
+                    elif len(s) < len(cells):
+                        reducedBox = [cell for cell in cells if cell[0] not in [c[0] for c in s]]
+                        if len(colCellsWithCandidates) == 0:
+                            removeFromCollection(reducedBox, all_cellsWithCandidates, i)
+                        
+
+                elif onSameRow(s):
+                    reducedRow = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==s[0][0][0] and k not in [j[0] for j in s]}
+                    rowCellsWithCandidates = getCellWithCandidate(reducedRow, i)
+
+                    if len(s) == len(cells):
+                        if len(rowCellsWithCandidates) > 0:
+                            removeFromCollection(rowCellsWithCandidates, all_cellsWithCandidates, i)                          
+
+                    elif len(s) < len(cells):
+                        reducedBox = [cell for cell in cells if cell[0] not in [c[0] for c in s]]
+                        if len(rowCellsWithCandidates) == 0:
+                            removeFromCollection(reducedBox, all_cellsWithCandidates, i)
+                        
+
+
+def findSingleCandidate(sudoku:np.ndarray, collection:dict, all_cellsWithCandidates):
+    if len(collection) ==0: return
+
+    for i in list(reduce(np.union1d, (collection.values()))):
+
         cells = getCellWithCandidate(collection, i)
         # If we have only a number in the collection who is not repeating itself
         # we set the corrispondent cell of the sudoku to that number
         if len(cells) == 1:
             cell = cells[0][0]
             all_cellsWithCandidates.pop(cell)
-            sudoku[cell[0],cell[1]] = i
+            #remove also from the col/row/box candidate
+            sudoku[cell] = i
             return
 
 def my_solver(sudoku):
@@ -170,16 +229,21 @@ def my_solver(sudoku):
         for i in range(9):
             row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
             findSingleCandidate(sudoku, row, all_cellsWithCandidates)
+            row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
             findTuple(row, all_cellsWithCandidates)
         # Every Columns
         for i in range(9):
             col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
             findSingleCandidate(sudoku, col, all_cellsWithCandidates)
+            col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
             findTuple(col, all_cellsWithCandidates)
         # Every Boxes
         for i in range(9):
             box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
             findSingleCandidate(sudoku, box, all_cellsWithCandidates)
+            box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+            findPointingTuple_or_Triple(box, all_cellsWithCandidates)
+            box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
             findTuple(box, all_cellsWithCandidates)
         
         print_sudoku(sudoku)
