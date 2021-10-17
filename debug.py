@@ -7,8 +7,10 @@
 
 # %%
 import logging
+from copy import deepcopy
 from collections import deque, Counter
 from queue import PriorityQueue
+from typing import Deque
 import networkx as nx
 from itertools import chain, combinations
 import matplotlib.pyplot as plt
@@ -91,6 +93,18 @@ simple_sudoku1 = np.array([[6, 0, 4,    0, 7, 0,    0, 0, 1],
                           [0, 4, 0,    0, 0, 0,    0, 6, 0], 
                           [2, 0, 0,    0, 5, 0,    7, 0, 8]], dtype=np.int8)
 
+simple_sudoku2 = np.array([
+                          [0, 0, 5,    0, 0, 0,    6, 0, 0],
+                          [0, 4, 0,    6, 0, 0,    0, 2, 0], 
+                          [3, 0, 0,    0, 7, 0,    0, 0, 5], 
+       
+                          [0, 2, 0,    0, 0, 6,    0, 0, 0], 
+                          [0, 0, 1,    0, 0, 0,    3, 0, 0], 
+                          [0, 0, 0,    4, 0, 0,    0, 6, 0], 
+       
+                          [5, 0, 0,    0, 3, 0,    0, 0, 1], 
+                          [0, 9, 0,    0, 0, 2,    0, 4, 0], 
+                          [0, 0, 8,    0, 0, 0,    5, 0, 0]], dtype=np.int8)
 
 
 
@@ -235,7 +249,9 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
     if len(collection) ==0: return
 
     for i in list(reduce(np.union1d, (collection.values()))):
-        
+        #TODO: Implement helper function "getBoxNumber" given a cell
+        #TODO: Make the join between the collections and call "removeFromCollection" only once
+
         cells = getCellWithCandidate(collection, i)
 
         # If we have only a number in the collection who is not repeating itself
@@ -255,13 +271,12 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
                 # remove from row
                 row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == cell[0] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
                 removeFromCollection(row, all_cellsWithCandidates, i)
-                # remove from col
+                # remove from box
                 box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == cell[0]//3*3 and k[1]//3*3 == cell[1]//3*3 and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
                 removeFromCollection(box, all_cellsWithCandidates, i)
 
             elif collectionType =="row":
-                # remove from row
-                #TODO: Implement helper function "getBoxNumber" given a cell
+                # remove from box
                 box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == cell[0]//3*3 and k[1]//3*3 == cell[1]//3*3 and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
                 removeFromCollection(box, all_cellsWithCandidates, i)
                 # remove from col
@@ -280,10 +295,18 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
 
 def my_solver(sudoku):
 
+    # Used to track if the algorithm modifie the sudoku's structure
     global modified
+    wrongGuess = False
+    cellIterator = 0
+    states = deque()
     all_cellsWithCandidates = sudoku_parser(sudoku)
 
     while len(all_cellsWithCandidates):
+        if [] in all_cellsWithCandidates.values():
+            modified = False
+            wrongGuess = True
+
         if modified:
             modified = False
             # Every Rows
@@ -300,25 +323,50 @@ def my_solver(sudoku):
                 findTuple(col, all_cellsWithCandidates)
             # Every Boxes
             for i in range(9):
-                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}#if modified
                 findSingleCandidate(sudoku, box, "box", all_cellsWithCandidates)
                 box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
                 findPointingTuple_or_Triple(box, all_cellsWithCandidates)
                 box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
                 findTuple(box, all_cellsWithCandidates)
             
-            # print_sudoku(sudoku)
-
-            print()
-            
         else:
-            # Make guess on the first free cell
-            # Save the guess 
-            # continue
-            return 
+            parsedCandidates = []
 
+            # Save the state
+            if(wrongGuess):
+                wrongGuess=False
+                # State recovery
+                all_cellsWithCandidates, parsedCandidates = states.pop()
+            
+           
+            # Take the first empty cell
+            myGuessCell = list(all_cellsWithCandidates.items())[0]
+            # Take the first candidate
+            myGuessCandidates = myGuessCell[1] if parsedCandidates == [] else parsedCandidates
+            myGuessCandidate = myGuessCandidates[0]
+            # Put the candidate inside the sudoku
+            sudoku[myGuessCell[0][0], myGuessCell[0][1]] = myGuessCandidate
+            # Save the state
+            all_cellsWithCandidatesCopy = deepcopy(all_cellsWithCandidates)
+            states.append((all_cellsWithCandidatesCopy, myGuessCandidates[1:-1]))
+            # Remove the cell from the cells with candidates dictionary
+            all_cellsWithCandidates.pop(myGuessCell[0])
 
+            # Delete the candidate from the row/col/box of the chosen cell
+            row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == myGuessCell[0][0] and (k,v)!= myGuessCell[0]]
+            col = [(k,v) for k,v in all_cellsWithCandidates.items() if k[1] == myGuessCell[0][1] and (k,v)!= myGuessCell[0]]
+            box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == myGuessCell[0][0]//3*3 and k[1]//3*3 == myGuessCell[0][1]//3*3 and (k,v)!= myGuessCell[0]]
 
+            removeFromCollection(row, all_cellsWithCandidates, myGuessCandidate)
+            removeFromCollection(col, all_cellsWithCandidates, myGuessCandidate)
+            removeFromCollection(box, all_cellsWithCandidates, myGuessCandidate)
+
+            continue 
+
+    print(valid_solution(sudoku))
+
+    return sudoku
 
 
 
