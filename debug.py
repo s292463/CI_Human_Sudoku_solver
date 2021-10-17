@@ -77,7 +77,28 @@ simple_sudoku = np.array([[0, 6, 0,    0, 5, 0,    0, 0, 3],
                           [0, 0, 8,    0, 4, 0,    0, 0, 0], 
                           [0, 1, 0,    0, 9, 0,    5, 0, 0]], dtype=np.int8)
 
+
+
+simple_sudoku1 = np.array([[6, 0, 4,    0, 7, 0,    0, 0, 1],
+                          [0, 5, 0,    0, 0, 0,    0, 7, 0], 
+                          [7, 0, 0,    5, 9, 6,    8, 3, 4], 
+       
+                          [0, 8, 0,    0, 0, 2,    4, 9, 0], 
+                          [1, 0, 0,    0, 0, 0,    0, 0, 3], 
+                          [0, 6, 9,    7, 0, 0,    0, 5, 0], 
+       
+                          [9, 1, 8,    3, 6, 7,    0, 0, 5], 
+                          [0, 4, 0,    0, 0, 0,    0, 6, 0], 
+                          [2, 0, 0,    0, 5, 0,    7, 0, 8]], dtype=np.int8)
+
+
+
+
+
+
 # %% My solution
+
+modified = True
 
 def buildGraph(components):
     undi_graph = nx.Graph()
@@ -140,6 +161,8 @@ def findTuple(cellsWithCandidates, all_cellsWithCandidates):
                         for candidate in candidates:
                             try:
                                 all_cellsWithCandidates[cell].remove(candidate)
+                                global modified 
+                                if not modified: modified = True
                             except ValueError: 
                                 pass
 
@@ -162,6 +185,8 @@ def removeFromCollection(collection, all_cellsWithCandidates: dict, numToRemove)
     for cell in collection:
         try:
             all_cellsWithCandidates[cell[0]].remove(numToRemove)
+            global modified 
+            if not modified: modified = True
         except ValueError: 
             pass
 
@@ -205,50 +230,109 @@ def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
                         
 
 
-def findSingleCandidate(sudoku:np.ndarray, collection:dict, all_cellsWithCandidates):
+def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str, all_cellsWithCandidates):
+    
     if len(collection) ==0: return
 
     for i in list(reduce(np.union1d, (collection.values()))):
-
+        
         cells = getCellWithCandidate(collection, i)
+
         # If we have only a number in the collection who is not repeating itself
         # we set the corrispondent cell of the sudoku to that number
         if len(cells) == 1:
             cell = cells[0][0]
+
+            if collectionType =="box":
+                # remove from row
+                row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == cell[0] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                removeFromCollection(row, all_cellsWithCandidates, i)
+                # remove from col
+                col = [(k,v) for k,v in all_cellsWithCandidates.items() if k[1] == cell[1] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                removeFromCollection(col, all_cellsWithCandidates, i)
+
+            elif collectionType =="col":
+                # remove from row
+                row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == cell[0] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                removeFromCollection(row, all_cellsWithCandidates, i)
+                # remove from col
+                box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == cell[0]//3*3 and k[1]//3*3 == cell[1]//3*3 and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                removeFromCollection(box, all_cellsWithCandidates, i)
+
+            elif collectionType =="row":
+                # remove from row
+                #TODO: Implement helper function "getBoxNumber" given a cell
+                box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == cell[0]//3*3 and k[1]//3*3 == cell[1]//3*3 and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                removeFromCollection(box, all_cellsWithCandidates, i)
+                # remove from col
+                col = [(k,v) for k,v in all_cellsWithCandidates.items() if k[1] == cell[1] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                removeFromCollection(col, all_cellsWithCandidates, i)
+
+
             all_cellsWithCandidates.pop(cell)
-            #remove also from the col/row/box candidate
             sudoku[cell] = i
+
+            global modified
+            if not modified: modified = True
+
             return
+
 
 def my_solver(sudoku):
 
+    global modified
     all_cellsWithCandidates = sudoku_parser(sudoku)
 
     while len(all_cellsWithCandidates):
-        # Every Rows
-        for i in range(9):
-            row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
-            findSingleCandidate(sudoku, row, all_cellsWithCandidates)
-            row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
-            findTuple(row, all_cellsWithCandidates)
-        # Every Columns
-        for i in range(9):
-            col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
-            findSingleCandidate(sudoku, col, all_cellsWithCandidates)
-            col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
-            findTuple(col, all_cellsWithCandidates)
-        # Every Boxes
-        for i in range(9):
-            box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
-            findSingleCandidate(sudoku, box, all_cellsWithCandidates)
-            box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
-            findPointingTuple_or_Triple(box, all_cellsWithCandidates)
-            box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
-            findTuple(box, all_cellsWithCandidates)
-        
-        print_sudoku(sudoku)
+        if modified:
+            modified = False
+            # Every Rows
+            for i in range(9):
+                row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
+                findSingleCandidate(sudoku, row, "row",all_cellsWithCandidates)
+                row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
+                findTuple(row, all_cellsWithCandidates)
+            # Every Columns
+            for i in range(9):
+                col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
+                findSingleCandidate(sudoku, col, "col", all_cellsWithCandidates)
+                col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
+                findTuple(col, all_cellsWithCandidates)
+            # Every Boxes
+            for i in range(9):
+                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                findSingleCandidate(sudoku, box, "box", all_cellsWithCandidates)
+                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                findPointingTuple_or_Triple(box, all_cellsWithCandidates)
+                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                findTuple(box, all_cellsWithCandidates)
+            
+            # print_sudoku(sudoku)
 
-        print()
+            print()
+            
+        else:
+            # Make guess on the first free cell
+            # Save the guess 
+            # continue
+            return 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # %%
@@ -268,8 +352,8 @@ def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
 
 # %%
 for sudoku in sudoku_generator(random_seed=42):
-    print_sudoku(simple_sudoku)
-    solution = my_solver(simple_sudoku)
+    print_sudoku(sudoku)
+    solution = my_solver(sudoku)
     if solution is not None:
         print_sudoku(solution)
 
