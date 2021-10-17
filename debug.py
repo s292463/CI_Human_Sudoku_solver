@@ -106,6 +106,19 @@ simple_sudoku2 = np.array([
                           [0, 9, 0,    0, 0, 2,    0, 4, 0], 
                           [0, 0, 8,    0, 0, 0,    5, 0, 0]], dtype=np.int8)
 
+simple_sudoku3 = np.array([
+                          [2, 0, 0,    4, 9, 1,    0, 8, 0],
+                          [7, 0, 0,    0, 0, 0,    4, 0, 0], 
+                          [0, 0, 9,    0, 0, 0,    0, 0, 0], 
+       
+                          [0, 0, 0,    7, 8, 0,    0, 0, 0], 
+                          [0, 2, 0,    0, 0, 0,    0, 5, 0], 
+                          [0, 0, 0,    0, 0, 0,    0, 0, 0], 
+       
+                          [5, 0, 0,    0, 1, 9,    0, 0, 0], 
+                          [4, 0, 0,    0, 3, 0,    8, 0, 0], 
+                          [0, 0, 0,    0, 0, 0,    0, 0, 0]], dtype=np.int8)
+
 
 
 
@@ -298,7 +311,6 @@ def my_solver(sudoku):
     # Used to track if the algorithm modifie the sudoku's structure
     global modified
     wrongGuess = False
-    cellIterator = 0
     states = deque()
     all_cellsWithCandidates = sudoku_parser(sudoku)
 
@@ -313,37 +325,38 @@ def my_solver(sudoku):
             for i in range(9):
                 row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
                 findSingleCandidate(sudoku, row, "row",all_cellsWithCandidates)
-                row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
+                if modified: row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
                 findTuple(row, all_cellsWithCandidates)
             # Every Columns
             for i in range(9):
                 col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
                 findSingleCandidate(sudoku, col, "col", all_cellsWithCandidates)
-                col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
+                if modified: col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
                 findTuple(col, all_cellsWithCandidates)
             # Every Boxes
             for i in range(9):
                 box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}#if modified
                 findSingleCandidate(sudoku, box, "box", all_cellsWithCandidates)
-                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
                 findPointingTuple_or_Triple(box, all_cellsWithCandidates)
-                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
                 findTuple(box, all_cellsWithCandidates)
             
         else:
-            parsedCandidates = []
+            parsedCandidates = -1
 
             # Save the state
             if(wrongGuess):
                 wrongGuess=False
                 # State recovery
                 all_cellsWithCandidates, parsedCandidates = states.pop()
-            
+                while parsedCandidates == []:
+                    all_cellsWithCandidates, parsedCandidates = states.pop()
            
             # Take the first empty cell
             myGuessCell = list(all_cellsWithCandidates.items())[0]
             # Take the first candidate
-            myGuessCandidates = myGuessCell[1] if parsedCandidates == [] else parsedCandidates
+            myGuessCandidates = myGuessCell[1] if parsedCandidates == -1 else parsedCandidates
             myGuessCandidate = myGuessCandidates[0]
             # Put the candidate inside the sudoku
             sudoku[myGuessCell[0][0], myGuessCell[0][1]] = myGuessCandidate
@@ -364,7 +377,8 @@ def my_solver(sudoku):
 
             continue 
 
-    print(valid_solution(sudoku))
+    if valid_solution(sudoku):
+        print("Valid solution found")
 
     return sudoku
 
@@ -399,9 +413,9 @@ def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
 
 
 # %%
-for sudoku in sudoku_generator(random_seed=42):
-    print_sudoku(sudoku)
-    solution = my_solver(sudoku)
+for sudoku in sudoku_generator(sudokus = 1, random_seed=42):
+    print_sudoku(simple_sudoku3)
+    solution = my_solver(simple_sudoku3)
     if solution is not None:
         print_sudoku(solution)
 
