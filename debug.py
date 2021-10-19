@@ -286,7 +286,7 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
                 col = cols[cell[1]]
                 removeFromCollection(col, all_cellsWithCandidates, i, counterOfModifications)
 
-            elif collectionType =="col":
+            elif collectionType == "col":
                 # remove from row
                 row = rows[cell[0]]
                 removeFromCollection(row, all_cellsWithCandidates, i, counterOfModifications)
@@ -294,7 +294,7 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
                 box = boxes[getBoxNumber(cell)]
                 removeFromCollection(box, all_cellsWithCandidates, i, counterOfModifications)
 
-            elif collectionType =="row":
+            elif collectionType == "row":
                 # remove from box
                 box = boxes[getBoxNumber(cell)]
                 removeFromCollection(box, all_cellsWithCandidates, i, counterOfModifications)
@@ -302,7 +302,7 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
                 col = cols[cell[1]]
                 removeFromCollection(col, all_cellsWithCandidates, i, counterOfModifications)
 
-            # Remove from the 
+            # Remove from the data and add the number to the sudoku 
             popFromStruct(all_cellsWithCandidates, rows, cols, boxes, cell)
             addToSudoku(sudoku, cell, i, counterOfModifications)
             
@@ -379,7 +379,7 @@ def my_solver(sudoku):
             
             # Delete the candidate from the row/col/box of the chosen cell
             #rowColBox = [k for k in all_cellsWithCandidates.keys() if k[0] == myGuessCell[0] or k[1] == myGuessCell[1] or getBoxNumber(k) == getBoxNumber(myGuessCell)]
-            rowColBox = {**rows[myGuessCell[0]], **cols[myGuessCell[1]],**boxes[getBoxNumber(myGuessCell)]}
+            rowColBox = {**rows[myGuessCell[0]], **cols[myGuessCell[1]], **boxes[getBoxNumber(myGuessCell)]}
             removeFromCollection(rowColBox, all_cellsWithCandidates, myGuessCandidate)
  
 
@@ -413,7 +413,9 @@ rowsAccumulator = list()
 colsAccumulator = list()
 boxesAccumulator = list()
 
-for sudoku in sudoku_generator(sudokus = 3, random_seed=42):
+numSudoku = 10
+
+for sudoku in sudoku_generator(sudokus = numSudoku, random_seed=42):
     print_sudoku(sudoku)
     print("\n")
 
