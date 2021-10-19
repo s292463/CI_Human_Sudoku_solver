@@ -14,6 +14,7 @@ import networkx as nx
 from itertools import combinations
 import numpy as np
 from functools import reduce
+from matplotlib import pyplot as plt
 
 
 logging.basicConfig(format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%H:%M:%S', level=logging.INFO)
@@ -102,16 +103,16 @@ simple_sudoku2 = np.array([
                           [0, 0, 8,    0, 0, 0,    5, 0, 0]], dtype=np.int8)
 
 simple_sudoku3 = np.array([
-                          [2, 0, 0,    4, 9, 1,    0, 8, 0],
-                          [7, 0, 0,    0, 0, 0,    4, 0, 0], 
-                          [0, 0, 9,    0, 0, 0,    0, 0, 0], 
+                          [4, 3, 9,    0, 0, 0,    0, 1, 0],
+                          [0, 0, 0,    4, 9, 0,    0, 8, 0], 
+                          [6, 1, 0,    3, 0, 8,    2, 5, 0], 
        
-                          [0, 0, 0,    7, 8, 0,    0, 0, 0], 
-                          [0, 2, 0,    0, 0, 0,    0, 5, 0], 
-                          [0, 0, 0,    0, 0, 0,    0, 0, 0], 
+                          [0, 9, 5,    8, 0, 0,    4, 0, 0], 
+                          [0, 0, 7,    0, 0, 0,    0, 6, 0], 
+                          [0, 0, 0,    0, 0, 1,    5, 0, 0], 
        
-                          [5, 0, 0,    0, 1, 9,    0, 0, 0], 
-                          [4, 0, 0,    0, 3, 0,    8, 0, 0], 
+                          [0, 0, 0,    0, 0, 7,    0, 0, 0], 
+                          [0, 0, 0,    0, 8, 2,    7, 0, 0], 
                           [0, 0, 0,    0, 0, 0,    0, 0, 0]], dtype=np.int8)
 
 
@@ -137,6 +138,9 @@ def getBoxNumber(cell: Tuple)-> int:
 def sudoku_parser(sudoku:np.ndarray):
     all_nums = list(range(1, 10))
     candidates_cells = dict()
+    rows = dict()
+    cols = dict()
+    boxes = dict()
 
     for i, row in enumerate(sudoku):
         for j, num in enumerate(row):
@@ -144,8 +148,12 @@ def sudoku_parser(sudoku:np.ndarray):
             blockCol = j//3*3
             if num == 0:
                 candidates_cells[(i,j)] = reduce(np.setdiff1d, (all_nums, row, sudoku[:,j], sudoku[blockRow : blockRow + 3, blockCol : blockCol + 3].flatten())).tolist()
+    for i in range(9):
+        rows[i] = {k:v for k,v in candidates_cells.items() if k[0] == i}
+        cols[i] = {k:v for k,v in candidates_cells.items() if k[1] == i}
+        boxes[i] = {k:v for k,v in candidates_cells.items() if getBoxNumber(k) == i}
 
-    return candidates_cells
+    return candidates_cells, rows, cols, boxes
 
 
 def subsetGenerator(completeSet, dimSet=None):
@@ -156,7 +164,7 @@ def subsetGenerator(completeSet, dimSet=None):
             yield s
 
 
-def findTuple(cellsWithCandidates, all_cellsWithCandidates):
+def findTuple(cellsWithCandidates, all_cellsWithCandidates, counterOfModifications = None):
     graph = buildGraph(cellsWithCandidates)
 
     while graph.number_of_nodes() != 0:
@@ -175,7 +183,7 @@ def findTuple(cellsWithCandidates, all_cellsWithCandidates):
                     cellsWithPossibleEliminations = list(filter(lambda x:  x not in subset, cc))
 
                     for candidate in candidates:
-                        removeFromCollection(cellsWithPossibleEliminations, all_cellsWithCandidates, candidate)
+                        removeFromCollection(cellsWithPossibleEliminations, all_cellsWithCandidates, candidate, counterOfModifications)
 
         for node in cc:
             graph.remove_node(node)
@@ -191,22 +199,31 @@ def onSameRow(collection):
     return all(x[0] == collection[0][0] for x in collection)
 
 
-def removeFromCollection(collection, all_cellsWithCandidates: dict, numToRemove):
+def removeFromCollection(collection, all_cellsWithCandidates: dict, numToRemove, counterOfModifications = None):
     for cell in collection:
         try:
             all_cellsWithCandidates[cell].remove(numToRemove)
+            if counterOfModifications != None: 
+                counterOfModifications[0] += 1
             global modified 
             if not modified: modified = True
         except ValueError: 
             pass
 
-def addToSudoku(sudoku, cell, num):
+def popFromStruct(all_cellsWithCandidates, rows, cols, boxes, cell):
+    all_cellsWithCandidates.pop(cell)
+    rows[cell[0]].pop(cell)
+    cols[cell[1]].pop(cell)
+    boxes[getBoxNumber(cell)].pop(cell)
+
+def addToSudoku(sudoku, cell, num, counterOfModifications = None):
     global modified
     
     sudoku[cell] = num 
+    if counterOfModifications!= None: counterOfModifications[0] += 1
     if not modified: modified = True
 
-def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
+def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict, counterOfModifications):
     # Invert the loop of subset and the number one to optimize
     
     iter =  reduce(np.union1d, box.values()).tolist() if len(box)>1 else box.values()
@@ -223,12 +240,12 @@ def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
 
                     if len(s) == len(cells):
                         if len(colCellsWithCandidates) > 0:
-                            removeFromCollection(colCellsWithCandidates, all_cellsWithCandidates, i)
+                            removeFromCollection(colCellsWithCandidates, all_cellsWithCandidates, i, counterOfModifications)
                         
                     elif len(s) < len(cells):
                         reducedBox = [cell for cell in cells if cell[0] not in [c[0] for c in s]]
                         if len(colCellsWithCandidates) == 0:
-                            removeFromCollection(reducedBox, all_cellsWithCandidates, i)
+                            removeFromCollection(reducedBox, all_cellsWithCandidates, i, counterOfModifications)
                         
 
                 elif onSameRow(s):
@@ -238,21 +255,21 @@ def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
 
                     if len(s) == len(cells):
                         if len(reducedRow) > 0:
-                            removeFromCollection(reducedRow, all_cellsWithCandidates, i)                          
+                            removeFromCollection(reducedRow, all_cellsWithCandidates, i, counterOfModifications)                          
 
                     elif len(s) < len(cells):
                         reducedBox = [cell for cell in cells if cell[0] not in [c[0] for c in s]]
                         if len(reducedRow) == 0:
-                            removeFromCollection(reducedBox, all_cellsWithCandidates, i)
+                            removeFromCollection(reducedBox, all_cellsWithCandidates, i, counterOfModifications)
                         
 
 
-def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str, all_cellsWithCandidates):
+def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str, all_cellsWithCandidates, counterOfModifications, rows, cols, boxes):
     
     if len(collection) == 0: return
 
     for i in list(reduce(np.union1d, (collection.values()))):
-        #TODO: Make the join between the collections and call "removeFromCollection" only once
+        #TODO: Make the join between the collections and call "removeFromCollection" only once (Make sense?)
 
         cells = getCellWithCandidate(collection, all_cellsWithCandidates, i)
 
@@ -261,33 +278,33 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
         if len(cells) == 1:
             cell = cells[0]
 
-            if collectionType =="box":
+            if collectionType == "box":
                 # remove from row
-                row = [k for k in all_cellsWithCandidates.keys() if k[0] == cell[0]]#TODO: try to remove the cell disuguagliance
-                removeFromCollection(row, all_cellsWithCandidates, i)
+                row = rows[cell[0]]
+                removeFromCollection(row, all_cellsWithCandidates, i, counterOfModifications)
                 # remove from col
-                col = [k for k in all_cellsWithCandidates.keys() if k[1] == cell[1]]
-                removeFromCollection(col, all_cellsWithCandidates, i)
+                col = cols[cell[1]]
+                removeFromCollection(col, all_cellsWithCandidates, i, counterOfModifications)
 
             elif collectionType =="col":
                 # remove from row
-                row = [k for k in all_cellsWithCandidates.keys() if k[0] == cell[0]]
-                removeFromCollection(row, all_cellsWithCandidates, i)
+                row = rows[cell[0]]
+                removeFromCollection(row, all_cellsWithCandidates, i, counterOfModifications)
                 # remove from box
-                box = [k for k in all_cellsWithCandidates.keys() if getBoxNumber(k) == getBoxNumber(cell)]
-                removeFromCollection(box, all_cellsWithCandidates, i)
+                box = boxes[getBoxNumber(cell)]
+                removeFromCollection(box, all_cellsWithCandidates, i, counterOfModifications)
 
             elif collectionType =="row":
                 # remove from box
-                box = [k for k in all_cellsWithCandidates.keys() if getBoxNumber(k) == getBoxNumber(cell)]
-                removeFromCollection(box, all_cellsWithCandidates, i)
+                box = boxes[getBoxNumber(cell)]
+                removeFromCollection(box, all_cellsWithCandidates, i, counterOfModifications)
                 # remove from col
-                col = [k for k in all_cellsWithCandidates.keys() if k[1] == cell[1]]
-                removeFromCollection(col, all_cellsWithCandidates, i)
+                col = cols[cell[1]]
+                removeFromCollection(col, all_cellsWithCandidates, i, counterOfModifications)
 
             # Remove from the 
-            all_cellsWithCandidates.pop(cell)
-            addToSudoku(sudoku, cell, i)
+            popFromStruct(all_cellsWithCandidates, rows, cols, boxes, cell)
+            addToSudoku(sudoku, cell, i, counterOfModifications)
             
             return
 
@@ -299,12 +316,16 @@ def my_solver(sudoku):
     wrongGuess = False
 
     expandedNodes = 0
-    counter = 0
+    algorithmExecutions = 0
+    rowModifications = [0]
+    colModifications = [0]
+    boxModifications = [0]
+
     states = deque()
-    all_cellsWithCandidates: Dict = sudoku_parser(sudoku)
+    all_cellsWithCandidates, rows, cols, boxes = sudoku_parser(sudoku)
 
     while len(all_cellsWithCandidates):
-        counter += 1
+        algorithmExecutions += 1
 
         if list() in all_cellsWithCandidates.values(): wrongGuess = True
 
@@ -312,25 +333,21 @@ def my_solver(sudoku):
             modified = False
             
             for i in range(9):
-                # Every Rows
-                row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
-                findSingleCandidate(sudoku, row, "row",all_cellsWithCandidates)
-                if modified: row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
-                findTuple(row, all_cellsWithCandidates)
-                
-                # Every Columns
-                col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
-                findSingleCandidate(sudoku, col, "col", all_cellsWithCandidates)
-                if modified: col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
-                findTuple(col, all_cellsWithCandidates)
-                
+
                 # Every Boxes
-                box = {k:v for (k,v) in all_cellsWithCandidates.items() if getBoxNumber(k) == i}
-                findSingleCandidate(sudoku, box, "box", all_cellsWithCandidates)
-                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if getBoxNumber(k) == i}
-                findPointingTuple_or_Triple(box, all_cellsWithCandidates)
-                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if getBoxNumber(k) == i}
-                findTuple(box, all_cellsWithCandidates)
+                box = boxes[i]
+                findPointingTuple_or_Triple(box, all_cellsWithCandidates, boxModifications)
+                findTuple(box, all_cellsWithCandidates, boxModifications)
+                findSingleCandidate(sudoku, box, "box", all_cellsWithCandidates, boxModifications, rows, cols, boxes)
+                # Every Rows
+                row = rows[i]
+                findTuple(row, all_cellsWithCandidates, rowModifications)
+                findSingleCandidate(sudoku, row, "row", all_cellsWithCandidates, rowModifications, rows, cols, boxes)
+                # Every Columns
+                col = cols[i]
+                findTuple(col, all_cellsWithCandidates, colModifications)
+                findSingleCandidate(sudoku, col, "col", all_cellsWithCandidates, colModifications, rows, cols, boxes)
+                
             
         else:
             parsedCandidates = None
@@ -338,10 +355,13 @@ def my_solver(sudoku):
             # State recovery
             if(wrongGuess):
                 wrongGuess = False
-                
-                all_cellsWithCandidates, parsedCandidates = states.pop()
+
+                # No solution Case
+                if len(states) == 0: return None, (), ()
+
+                all_cellsWithCandidates, rows, cols, boxes, parsedCandidates = states.pop()
                 while parsedCandidates == []:
-                    all_cellsWithCandidates, parsedCandidates = states.pop()
+                    all_cellsWithCandidates, rows, cols, boxes, parsedCandidates = states.pop()
            
             # Take the first empty cell
             myGuessCell = list(all_cellsWithCandidates.keys())[0]
@@ -353,20 +373,24 @@ def my_solver(sudoku):
             # Expand a node every guess
             expandedNodes += 1
             # Save the state
-            states.append((deepcopy(all_cellsWithCandidates), myGuessCandidates[1:-1]))
+            states.append((deepcopy(all_cellsWithCandidates), deepcopy(rows), deepcopy(cols), deepcopy(boxes), myGuessCandidates[1:-1]))
             # Remove the cell from the cells with candidates dictionary
-            all_cellsWithCandidates.pop(myGuessCell)
-
+            popFromStruct(all_cellsWithCandidates, rows, cols, boxes, myGuessCell)
+            
             # Delete the candidate from the row/col/box of the chosen cell
-            rowColBox = [k for k in all_cellsWithCandidates.keys() if k[0] == myGuessCell[0] or k[1] == myGuessCell[1] or getBoxNumber(k) == getBoxNumber(myGuessCell)]
+            #rowColBox = [k for k in all_cellsWithCandidates.keys() if k[0] == myGuessCell[0] or k[1] == myGuessCell[1] or getBoxNumber(k) == getBoxNumber(myGuessCell)]
+            rowColBox = {**rows[myGuessCell[0]], **cols[myGuessCell[1]],**boxes[getBoxNumber(myGuessCell)]}
             removeFromCollection(rowColBox, all_cellsWithCandidates, myGuessCandidate)
  
 
     if valid_solution(sudoku):
         print(f"Valid solution found with {expandedNodes} expanded nodes")
-        print(f"Algorithm excecuted {counter} times")
+        print(f"Algorithm excecuted {algorithmExecutions} times")
+        print(f"Rows section make modifcations {rowModifications} times")
+        print(f"Columns section make modifcations {colModifications} times")
+        print(f"Boxes section make modifcations {boxModifications} times")
 
-    return sudoku
+    return sudoku, (expandedNodes, algorithmExecutions), (rowModifications, colModifications, boxModifications)
 
 
 # %%
@@ -385,13 +409,37 @@ def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
 
 
 # %%
-for sudoku in sudoku_generator(sudokus = 5, random_seed=42):
+rowsAccumulator = list()
+colsAccumulator = list()
+boxesAccumulator = list()
+
+for sudoku in sudoku_generator(sudokus = 3, random_seed=42):
     print_sudoku(sudoku)
-    solution = my_solver(sudoku)
+    print("\n")
+
+    solution, generalPerformances, sectionPerformances = my_solver(sudoku)
+    
+    # TODO: print performances on histogram
     if solution is not None:
         print_sudoku(solution)
         print("\n\n")
+        rowsAccumulator.append(sectionPerformances[0][0])
+        colsAccumulator.append(sectionPerformances[1][0])
+        boxesAccumulator.append(sectionPerformances[2][0])
+    else:
+        print("No solution")
+    
+    
 
+plt.figure(figsize=(9,9))
+
+plt.hist(rowsAccumulator, bins=10, alpha=0.3, label='Rows')
+plt.hist(colsAccumulator, bins=10, alpha=0.3, label='Cols')
+plt.hist(boxesAccumulator, bins=10,  alpha=0.3, label='Boxes')
+
+
+plt.legend(loc='upper right')
+plt.show()
 
 # %%
 
