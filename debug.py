@@ -9,6 +9,7 @@
 import logging
 from copy import deepcopy
 from collections import deque
+from typing import Dict, List, Tuple
 import networkx as nx
 from itertools import combinations
 import numpy as np
@@ -115,10 +116,7 @@ simple_sudoku3 = np.array([
 
 
 
-
-
 # %% My solution
-
 modified = True
 
 def buildGraph(components):
@@ -133,17 +131,19 @@ def buildGraph(components):
     
     return undi_graph
 
+def getBoxNumber(cell: Tuple)-> int:
+    return cell[0]//3 + cell[1]//3 * 3
 
 def sudoku_parser(sudoku:np.ndarray):
-    all_nums = [i for i in range(1,10)]
-    candidates_cells={}
+    all_nums = list(range(1, 10))
+    candidates_cells = dict()
 
     for i, row in enumerate(sudoku):
         for j, num in enumerate(row):
             blockRow = i//3*3
             blockCol = j//3*3
             if num == 0:
-                candidates_cells[(i,j)] = reduce(np.setdiff1d, (all_nums, row, sudoku[:,j], sudoku[blockRow:blockRow+3, blockCol:blockCol+3 ].flatten())).tolist()
+                candidates_cells[(i,j)] = reduce(np.setdiff1d, (all_nums, row, sudoku[:,j], sudoku[blockRow : blockRow + 3, blockCol : blockCol + 3].flatten())).tolist()
 
     return candidates_cells
 
@@ -161,70 +161,65 @@ def findTuple(cellsWithCandidates, all_cellsWithCandidates):
 
     while graph.number_of_nodes() != 0:
 
-        # Find connected component in the cellGraph
+        # Find connected component in the cellGraph and take the first one cc
         cc = list(nx.connected_components(graph))[0]
 
         if len(cc) > 1:
 
             for subset in subsetGenerator(cc):
 
-                # TODO: verify if this condition is already satisfied in the subsetGenerator function
-                if len(subset) < 2 or len(subset) == len(cc): continue 
-
-                candidates = reduce(np.union1d, (all_cellsWithCandidates[x] for x in subset))
+                candidates = reduce(np.union1d, (cellsWithCandidates[x] for x in subset))
                 
-                # The lenght of subset at this point should already be minor of component nodes
-                if len(candidates) == len(subset) and len(subset) < len(cc):
+                if len(candidates) == len(subset):
 
                     cellsWithPossibleEliminations = list(filter(lambda x:  x not in subset, cc))
 
-                    for cell in cellsWithPossibleEliminations:
-                        for candidate in candidates:
-                            try:
-                                all_cellsWithCandidates[cell].remove(candidate)
-                                global modified 
-                                if not modified: modified = True
-                            except ValueError: 
-                                pass
+                    for candidate in candidates:
+                        removeFromCollection(cellsWithPossibleEliminations, all_cellsWithCandidates, candidate)
 
         for node in cc:
             graph.remove_node(node)
 
 
-def getCellWithCandidate(collection: dict, num):
-    return list(filter(lambda item : num in item[1] , collection.items()))
+def getCellWithCandidate(collection, all_cellsWithCandidates, num):
+    return list(filter(lambda item : num in all_cellsWithCandidates[item] , collection))
 
-def onSameCol(collection:dict):
-    return all(x[0][1] == collection[0][0][1] for x in collection)
+def onSameCol(collection):
+    return all(x[1] == collection[0][1] for x in collection)
 
-def onSameRow(collection:dict):
-    return all(x[0][0] == collection[0][0][0] for x in collection)
+def onSameRow(collection):
+    return all(x[0] == collection[0][0] for x in collection)
 
 
 def removeFromCollection(collection, all_cellsWithCandidates: dict, numToRemove):
-
     for cell in collection:
         try:
-            all_cellsWithCandidates[cell[0]].remove(numToRemove)
+            all_cellsWithCandidates[cell].remove(numToRemove)
             global modified 
             if not modified: modified = True
         except ValueError: 
             pass
 
+def addToSudoku(sudoku, cell, num):
+    global modified
+    
+    sudoku[cell] = num 
+    if not modified: modified = True
+
 def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
     # Invert the loop of subset and the number one to optimize
     
-    iter =  reduce(np.union1d, (box.values())).tolist() if len(box)>1 else box.values()
+    iter =  reduce(np.union1d, box.values()).tolist() if len(box)>1 else box.values()
     
     for i in iter:
 
-        cells = getCellWithCandidate(box, i)
+        cells = getCellWithCandidate(box.keys(), all_cellsWithCandidates, i)
 
         for s in subsetGenerator(cells, dimSet = [3,2]):
-            if s!=[]: # if len(s):
+            if len(s):
                 if onSameCol(s):
-                    reducedCol = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==s[0][0][1] and k not in [j[0] for j in s]}
-                    colCellsWithCandidates = getCellWithCandidate(reducedCol, i)
+                    reducedCol = [k for k in all_cellsWithCandidates.keys() if k[1] == s[0][1] and k not in s]
+                    colCellsWithCandidates = getCellWithCandidate(reducedCol, all_cellsWithCandidates, i)
 
                     if len(s) == len(cells):
                         if len(colCellsWithCandidates) > 0:
@@ -237,8 +232,9 @@ def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
                         
 
                 elif onSameRow(s):
-                    reducedRow = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==s[0][0][0] and k not in [j[0] for j in s]}
-                    rowCellsWithCandidates = getCellWithCandidate(reducedRow, i)
+                    reducedRow = [k for k in all_cellsWithCandidates.keys() if k[0] == s[0][0] and k not in s]
+                    # We can eliminate this step but lot of void elimination tries will be made
+                    rowCellsWithCandidates = getCellWithCandidate(reducedRow, all_cellsWithCandidates, i)
 
                     if len(s) == len(cells):
                         if len(rowCellsWithCandidates) > 0:
@@ -256,143 +252,118 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
     if len(collection) ==0: return
 
     for i in list(reduce(np.union1d, (collection.values()))):
-        #TODO: Implement helper function "getBoxNumber" given a cell
         #TODO: Make the join between the collections and call "removeFromCollection" only once
 
-        cells = getCellWithCandidate(collection, i)
+        cells = getCellWithCandidate(collection, all_cellsWithCandidates, i)
 
         # If we have only a number in the collection who is not repeating itself
         # we set the corrispondent cell of the sudoku to that number
         if len(cells) == 1:
-            cell = cells[0][0]
+            cell = cells[0]
 
             if collectionType =="box":
                 # remove from row
-                row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == cell[0] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                row = [k for k in all_cellsWithCandidates.keys() if k[0] == cell[0]]#TODO: try to remove the cell disuguagliance
                 removeFromCollection(row, all_cellsWithCandidates, i)
                 # remove from col
-                col = [(k,v) for k,v in all_cellsWithCandidates.items() if k[1] == cell[1] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                col = [k for k in all_cellsWithCandidates.keys() if k[1] == cell[1]]
                 removeFromCollection(col, all_cellsWithCandidates, i)
 
             elif collectionType =="col":
                 # remove from row
-                row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == cell[0] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                row = [k for k in all_cellsWithCandidates.keys() if k[0] == cell[0]]
                 removeFromCollection(row, all_cellsWithCandidates, i)
                 # remove from box
-                box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == cell[0]//3*3 and k[1]//3*3 == cell[1]//3*3 and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                box = [k for k in all_cellsWithCandidates.keys() if getBoxNumber(k) == getBoxNumber(cell)]
                 removeFromCollection(box, all_cellsWithCandidates, i)
 
             elif collectionType =="row":
                 # remove from box
-                box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == cell[0]//3*3 and k[1]//3*3 == cell[1]//3*3 and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                box = [k for k in all_cellsWithCandidates.keys() if getBoxNumber(k) == getBoxNumber(cell)]
                 removeFromCollection(box, all_cellsWithCandidates, i)
                 # remove from col
-                col = [(k,v) for k,v in all_cellsWithCandidates.items() if k[1] == cell[1] and (k,v)!= cell]#TODO: try to remove the cell disuguagliance
+                col = [k for k in all_cellsWithCandidates.keys() if k[1] == cell[1]]
                 removeFromCollection(col, all_cellsWithCandidates, i)
 
 
             all_cellsWithCandidates.pop(cell)
-            sudoku[cell] = i
-
-            global modified
-            if not modified: modified = True
-
+            addToSudoku(sudoku, cell, i)
+            
             return
 
 
 def my_solver(sudoku):
 
-    # Used to track if the algorithm modifie the sudoku's structure
+    # Used to track if the algorithm modifies the sudoku's structure
     global modified
     wrongGuess = False
 
     expandedNodes = 0
     states = deque()
-    all_cellsWithCandidates = sudoku_parser(sudoku)
+    all_cellsWithCandidates: Dict = sudoku_parser(sudoku)
 
     while len(all_cellsWithCandidates):
-        if [] in all_cellsWithCandidates.values():
-            modified = False
-            wrongGuess = True
 
-        if modified:
+        if list() in all_cellsWithCandidates.values(): wrongGuess = True
+
+        if modified and not wrongGuess:
             modified = False
-            # Every Rows
+            
             for i in range(9):
+                # Every Rows
                 row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
                 findSingleCandidate(sudoku, row, "row",all_cellsWithCandidates)
                 if modified: row = {k:v for (k,v) in all_cellsWithCandidates.items() if k[0]==i}
                 findTuple(row, all_cellsWithCandidates)
-            # Every Columns
-            for i in range(9):
+                
+                # Every Columns
                 col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
                 findSingleCandidate(sudoku, col, "col", all_cellsWithCandidates)
                 if modified: col = {k:v for (k,v) in all_cellsWithCandidates.items() if k[1]==i}
                 findTuple(col, all_cellsWithCandidates)
-            # Every Boxes
-            for i in range(9):
-                box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}#if modified
+                
+                # Every Boxes
+                box = {k:v for (k,v) in all_cellsWithCandidates.items() if getBoxNumber(k) == i}
                 findSingleCandidate(sudoku, box, "box", all_cellsWithCandidates)
-                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if getBoxNumber(k) == i}
                 findPointingTuple_or_Triple(box, all_cellsWithCandidates)
-                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if (k[1]//3 + k[0]//3*3) == i}
+                if modified: box = {k:v for (k,v) in all_cellsWithCandidates.items() if getBoxNumber(k) == i}
                 findTuple(box, all_cellsWithCandidates)
             
         else:
-            parsedCandidates = -1
-
-            # Save the state
+            parsedCandidates = None
+            
+            # State recovery
             if(wrongGuess):
-                wrongGuess=False
-                # State recovery
+                wrongGuess = False
+                
                 all_cellsWithCandidates, parsedCandidates = states.pop()
                 while parsedCandidates == []:
                     all_cellsWithCandidates, parsedCandidates = states.pop()
            
             # Take the first empty cell
-            myGuessCell = list(all_cellsWithCandidates.items())[0]
+            myGuessCell = list(all_cellsWithCandidates.keys())[0]
             # Take the first candidate
-            myGuessCandidates = myGuessCell[1] if parsedCandidates == -1 else parsedCandidates
+            myGuessCandidates = all_cellsWithCandidates[myGuessCell] if not parsedCandidates else parsedCandidates
             myGuessCandidate = myGuessCandidates[0]
             # Put the candidate inside the sudoku
-            sudoku[myGuessCell[0][0], myGuessCell[0][1]] = myGuessCandidate
+            addToSudoku(sudoku, myGuessCell, myGuessCandidate)
             # Expand a node every guess
             expandedNodes += 1
             # Save the state
-            all_cellsWithCandidatesCopy = deepcopy(all_cellsWithCandidates)
-            states.append((all_cellsWithCandidatesCopy, myGuessCandidates[1:-1]))
+            states.append((deepcopy(all_cellsWithCandidates), myGuessCandidates[1:-1]))
             # Remove the cell from the cells with candidates dictionary
-            all_cellsWithCandidates.pop(myGuessCell[0])
+            all_cellsWithCandidates.pop(myGuessCell)
 
             # Delete the candidate from the row/col/box of the chosen cell
-            row = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0] == myGuessCell[0][0] and (k,v)!= myGuessCell[0]]
-            col = [(k,v) for k,v in all_cellsWithCandidates.items() if k[1] == myGuessCell[0][1] and (k,v)!= myGuessCell[0]]
-            box = [(k,v) for k,v in all_cellsWithCandidates.items() if k[0]//3*3 == myGuessCell[0][0]//3*3 and k[1]//3*3 == myGuessCell[0][1]//3*3 and (k,v)!= myGuessCell[0]]
-
-            removeFromCollection(row, all_cellsWithCandidates, myGuessCandidate)
-            removeFromCollection(col, all_cellsWithCandidates, myGuessCandidate)
-            removeFromCollection(box, all_cellsWithCandidates, myGuessCandidate)
-
-            continue 
+            rowColBox = [k for k in all_cellsWithCandidates.keys() if k[0] == myGuessCell[0] or k[1] == myGuessCell[1] or getBoxNumber(k) == getBoxNumber(myGuessCell)]
+            removeFromCollection(rowColBox, all_cellsWithCandidates, myGuessCandidate)
+ 
 
     if valid_solution(sudoku):
         print(f"Valid solution found with {expandedNodes} expanded nodes")
 
     return sudoku
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # %%
@@ -416,6 +387,7 @@ for sudoku in sudoku_generator(sudokus = 1, random_seed=42):
     solution = my_solver(simple_sudoku3)
     if solution is not None:
         print_sudoku(solution)
+        print("\n\n")
 
 
 # %%
