@@ -234,22 +234,22 @@ def findPointingTuple_or_Triple(box: dict, all_cellsWithCandidates:dict):
                 elif onSameRow(s):
                     reducedRow = [k for k in all_cellsWithCandidates.keys() if k[0] == s[0][0] and k not in s]
                     # We can eliminate this step but lot of void elimination tries will be made
-                    rowCellsWithCandidates = getCellWithCandidate(reducedRow, all_cellsWithCandidates, i)
+                    # rowCellsWithCandidates = getCellWithCandidate(reducedRow, all_cellsWithCandidates, i)
 
                     if len(s) == len(cells):
-                        if len(rowCellsWithCandidates) > 0:
-                            removeFromCollection(rowCellsWithCandidates, all_cellsWithCandidates, i)                          
+                        if len(reducedRow) > 0:
+                            removeFromCollection(reducedRow, all_cellsWithCandidates, i)                          
 
                     elif len(s) < len(cells):
                         reducedBox = [cell for cell in cells if cell[0] not in [c[0] for c in s]]
-                        if len(rowCellsWithCandidates) == 0:
+                        if len(reducedRow) == 0:
                             removeFromCollection(reducedBox, all_cellsWithCandidates, i)
                         
 
 
 def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str, all_cellsWithCandidates):
     
-    if len(collection) ==0: return
+    if len(collection) == 0: return
 
     for i in list(reduce(np.union1d, (collection.values()))):
         #TODO: Make the join between the collections and call "removeFromCollection" only once
@@ -285,7 +285,7 @@ def findSingleCandidate(sudoku:np.ndarray, collection:dict, collectionType: str,
                 col = [k for k in all_cellsWithCandidates.keys() if k[1] == cell[1]]
                 removeFromCollection(col, all_cellsWithCandidates, i)
 
-
+            # Remove from the 
             all_cellsWithCandidates.pop(cell)
             addToSudoku(sudoku, cell, i)
             
@@ -299,10 +299,12 @@ def my_solver(sudoku):
     wrongGuess = False
 
     expandedNodes = 0
+    counter = 0
     states = deque()
     all_cellsWithCandidates: Dict = sudoku_parser(sudoku)
 
     while len(all_cellsWithCandidates):
+        counter += 1
 
         if list() in all_cellsWithCandidates.values(): wrongGuess = True
 
@@ -362,6 +364,7 @@ def my_solver(sudoku):
 
     if valid_solution(sudoku):
         print(f"Valid solution found with {expandedNodes} expanded nodes")
+        print(f"Algorithm excecuted {counter} times")
 
     return sudoku
 
@@ -382,9 +385,9 @@ def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
 
 
 # %%
-for sudoku in sudoku_generator(sudokus = 1, random_seed=42):
-    print_sudoku(simple_sudoku3)
-    solution = my_solver(simple_sudoku3)
+for sudoku in sudoku_generator(sudokus = 5, random_seed=42):
+    print_sudoku(sudoku)
+    solution = my_solver(sudoku)
     if solution is not None:
         print_sudoku(solution)
         print("\n\n")
