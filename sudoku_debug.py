@@ -390,7 +390,7 @@ executionTimeAccumulator = list()
 expandedNodesAccumulator = list()
 algorithmExecutionsAccumulator = list()
 
-numSudoku = solvedSudokus = 40
+numSudoku = solvedSudokus = 1
 
 for sudoku in sudoku_generator(sudokus = numSudoku, random_seed=42):
     print_sudoku(sudoku)
