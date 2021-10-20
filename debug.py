@@ -307,6 +307,7 @@ def findSingleCandidate(sudoku, collection, collectionType, all_cellsWithCandida
 
 
 def my_solver(sudoku):
+    # TODO: parallelize the tasks in boxes, cols and rows tasks
 
     # Used to track if the algorithm modifies the sudoku's structure
     global modified
@@ -322,6 +323,7 @@ def my_solver(sudoku):
     all_cellsWithCandidates, rows, cols, boxes = sudoku_parser(sudoku)
 
     start = time()
+
     while len(all_cellsWithCandidates):
         algorithmExecutions += 1
 
@@ -379,16 +381,17 @@ def my_solver(sudoku):
             rowColBox = {**rows[myGuessCell[0]], **cols[myGuessCell[1]], **boxes[getBoxNumber(myGuessCell)]}
             removeFromCollection(rowColBox, all_cellsWithCandidates, myGuessCandidate)
  
+    executionTime = time() - start
 
     if valid_solution(sudoku):
-        print(f"Solved in {(time()-start)}")
+        print(f"Solved in {executionTime}")
         print(f"Valid solution found with {expandedNodes} expanded nodes")
         print(f"Algorithm excecuted {algorithmExecutions} times")
         print(f"Rows section make modifcations {rowModifications} times")
         print(f"Columns section make modifcations {colModifications} times")
         print(f"Boxes section make modifcations {boxModifications} times")
 
-    return sudoku, (expandedNodes, algorithmExecutions), (rowModifications, colModifications, boxModifications)
+    return sudoku, (expandedNodes, algorithmExecutions, executionTime), (rowModifications, colModifications, boxModifications)
 
 
 # %%
@@ -406,12 +409,25 @@ def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
         yield sudoku.copy()
 
 
+def printBarChart(x, y, chart, label):
+
+    chart.bar(x, y, label=label)
+    #chart.set_title(chartName)
+    #chart.set_ylabel('Sudoku')
+    chart.set_xlabel('Sudokus')
+    chart.legend(loc='upper right')
+
+
 # %%
 rowsAccumulator = list()
 colsAccumulator = list()
 boxesAccumulator = list()
+executionTimeAccumulator = list()
+expandedNodesAccumulator = list()
+algorithmExecutionsAccumulator = list()
 
-numSudoku = 2
+numSudoku = 40
+noSolutionSudoku = 0
 
 for sudoku in sudoku_generator(sudokus = numSudoku, random_seed=42):
     print_sudoku(sudoku)
@@ -419,24 +435,27 @@ for sudoku in sudoku_generator(sudokus = numSudoku, random_seed=42):
     
     if solution is not None:
         print_sudoku(solution)
-        print("\n\n")
+        
+        expandedNodesAccumulator.append(generalPerformances[0])
+        algorithmExecutionsAccumulator.append(generalPerformances[1])
+        executionTimeAccumulator.append(generalPerformances[2])
+
         rowsAccumulator.append(sectionPerformances[0][0])
         colsAccumulator.append(sectionPerformances[1][0])
         boxesAccumulator.append(sectionPerformances[2][0])
+
+        print("\n\n")
     else:
         print("No solution")
+        noSolutionSudoku += 1
     
     
+solvedSudokus = numSudoku - noSolutionSudoku
+labels = np.array([['Rows', 'Cols', 'Boxes'],['Number of expanded nodes', 'Number of Algorithm executions', 'Executions Time']])
+fig, ax = plt.subplots(2, 3, figsize=(20,10))
+for i, row in enumerate(ax):
+    for j, chart in enumerate(row):
+        printBarChart(range(solvedSudokus), rowsAccumulator, chart, labels[i,j])
 
-plt.figure(figsize=(9,9))
-
-plt.bar(range(numSudoku), rowsAccumulator, alpha=0.3, label='Rows')
-plt.bar(range(numSudoku), colsAccumulator, alpha=0.3, label='Cols')
-plt.bar(range(numSudoku), boxesAccumulator, alpha=0.3, label='Boxes')
-
-plt.xlabel("Sudokus")
-plt.ylabel("Num of Modifications")
-
-plt.legend(loc='upper right')
 plt.show()
 
