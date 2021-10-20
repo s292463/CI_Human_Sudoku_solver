@@ -1,15 +1,8 @@
-# To add a new cell, type '# %%'
-# To add a new markdown cell, type '# %% [markdown]'
-# %% [markdown]
-# Copyright **`(c)`** 2021 Giovanni Squillero `<squillero@polito.it>`  
-# `https://github.com/squillero/computational-intelligence`  
-# Free for personal or classroom use; see 'LICENCE.md' for details.
-
 # %%
 import logging
 from copy import deepcopy
 from collections import deque
-from typing import Tuple
+
 import networkx as nx
 from itertools import combinations
 import numpy as np
@@ -17,9 +10,7 @@ from functools import reduce
 from matplotlib import pyplot as plt
 from time import time
 
-
 logging.basicConfig(format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%H:%M:%S', level=logging.INFO)
-
 
 # %%
 def _contains_duplicates(X):
@@ -40,29 +31,6 @@ def print_sudoku(sudoku):
             print("|", " | ".join(" ".join(str(_) for _ in sudoku[b+r, c:c+3]) for c in range(0, 9, 3)), "|")
         print("+-------+-------+-------+")
 
-
-# %%
-def dfsolve(sudoku):
-    """Vanilla depth-first solver for sudoku puzzles"""
-    frontier = deque([sudoku.copy()])
-    num_nodes = 0
-    while frontier:
-        node = frontier.popleft()
-        num_nodes += 1
-
-        if valid_solution(node):
-            logging.info(f"Solved after expanding {num_nodes:,} nodes")
-            return node
-
-        for i, j in zip(*np.where(node == 0)):
-            for c in range(1, 10):
-                node[i, j] = c
-                if not contains_duplicates(node):
-                    frontier.appendleft(node.copy())
-    logging.info(f"Giving up after expanding {num_nodes:,} nodes")
-    return None
-
-
 # %%
 simple_sudoku = np.array([[0, 6, 0,    0, 5, 0,    0, 0, 3],
                           [0, 0, 0,    0, 1, 2,    0, 5, 6], 
@@ -75,8 +43,6 @@ simple_sudoku = np.array([[0, 6, 0,    0, 5, 0,    0, 0, 3],
                           [0, 9, 0,    0, 2, 0,    6, 0, 0], 
                           [0, 0, 8,    0, 4, 0,    0, 0, 0], 
                           [0, 1, 0,    0, 9, 0,    5, 0, 0]], dtype=np.int8)
-
-
 
 simple_sudoku1 = np.array([[6, 0, 4,    0, 7, 0,    0, 0, 1],
                           [0, 5, 0,    0, 0, 0,    0, 7, 0], 
@@ -116,8 +82,6 @@ simple_sudoku3 = np.array([
                           [0, 0, 0,    0, 8, 2,    7, 0, 0], 
                           [0, 0, 0,    0, 0, 0,    0, 0, 0]], dtype=np.int8)
 
-
-
 # %% My solution
 modified = True
 
@@ -156,6 +120,17 @@ def sudoku_parser(sudoku):
 
     return candidates_cells, rows, cols, boxes
 
+def subsetGenerator2(n, k):
+    a = np.ones((k, n-k+1), dtype=int)
+    a[0] = np.arange(n-k+1)
+    for j in range(1, k):
+        reps = (n-k+j) - a[j-1]
+        a = np.repeat(a, reps, axis=1)
+        ind = np.add.accumulate(reps)
+        a[j, ind[:-1]] = 1-reps[1:]
+        a[j, 0] = j
+        a[j] = np.add.accumulate(a[j])
+    return a
 
 def subsetGenerator(completeSet, dimSet=None):
     if dimSet == None: dimSet = range(2, len(completeSet)) 
@@ -163,7 +138,6 @@ def subsetGenerator(completeSet, dimSet=None):
     for r in dimSet:
         for s in list(combinations(completeSet, r)):
             yield s
-
 
 def findTuple(cellsWithCandidates, all_cellsWithCandidates, counterOfModifications = None):
     graph = buildGraph(cellsWithCandidates)
@@ -189,7 +163,6 @@ def findTuple(cellsWithCandidates, all_cellsWithCandidates, counterOfModificatio
         for node in cc:
             graph.remove_node(node)
 
-
 def getCellWithCandidate(collection, all_cellsWithCandidates, num):
     return list(filter(lambda item : num in all_cellsWithCandidates[item] , collection))
 
@@ -198,7 +171,6 @@ def onSameCol(collection):
 
 def onSameRow(collection):
     return all(x[0] == collection[0][0] for x in collection)
-
 
 def removeFromCollection(collection, all_cellsWithCandidates, numToRemove, counterOfModifications = None):
     for cell in collection:
@@ -232,7 +204,7 @@ def findPointingTuple_or_Triple(box, all_cellsWithCandidates, counterOfModificat
     for i in iter:
 
         cells = getCellWithCandidate(box.keys(), all_cellsWithCandidates, i)
-
+        # for s in subsetGenerator2(cells, 3):
         for s in subsetGenerator(cells, dimSet = [3,2]):
             if len(s):
                 if onSameCol(s):
@@ -260,8 +232,6 @@ def findPointingTuple_or_Triple(box, all_cellsWithCandidates, counterOfModificat
                         if len(reducedRow) == 0:
                             removeFromCollection(reducedBox, all_cellsWithCandidates, i, counterOfModifications)
                         
-
-
 def findSingleCandidate(sudoku, collection, collectionType, all_cellsWithCandidates, counterOfModifications, rows, cols, boxes):
     
     if not len(collection): 
@@ -304,7 +274,6 @@ def findSingleCandidate(sudoku, collection, collectionType, all_cellsWithCandida
             addToSudoku(sudoku, cell, i, counterOfModifications)
             
             return
-
 
 def my_solver(sudoku):
     # TODO: parallelize the tasks in boxes, cols and rows tasks
@@ -393,7 +362,6 @@ def my_solver(sudoku):
 
     return sudoku, (expandedNodes, algorithmExecutions, executionTime), (rowModifications, colModifications, boxModifications)
 
-
 # %%
 def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
     if random_seed:
@@ -408,12 +376,8 @@ def sudoku_generator(sudokus=1, *, kappa=5, random_seed=None):
                     sudoku = tmp
         yield sudoku.copy()
 
-
 def printBarChart(x, y, chart, label):
-
     chart.bar(x, y, label=label)
-    #chart.set_title(chartName)
-    #chart.set_ylabel('Sudoku')
     chart.set_xlabel('Sudokus')
     chart.legend(loc='upper right')
 
@@ -426,13 +390,12 @@ executionTimeAccumulator = list()
 expandedNodesAccumulator = list()
 algorithmExecutionsAccumulator = list()
 
-numSudoku = 40
-noSolutionSudoku = 0
+numSudoku = solvedSudokus = 40
 
 for sudoku in sudoku_generator(sudokus = numSudoku, random_seed=42):
     print_sudoku(sudoku)
     solution, generalPerformances, sectionPerformances = my_solver(sudoku)
-    
+     
     if solution is not None:
         print_sudoku(solution)
         
@@ -447,15 +410,15 @@ for sudoku in sudoku_generator(sudokus = numSudoku, random_seed=42):
         print("\n\n")
     else:
         print("No solution")
-        noSolutionSudoku += 1
+        solvedSudokus -= 1
     
-    
-solvedSudokus = numSudoku - noSolutionSudoku
 labels = np.array([['Rows', 'Cols', 'Boxes'],['Number of expanded nodes', 'Number of Algorithm executions', 'Executions Time']])
+data = np.array([[rowsAccumulator, colsAccumulator, boxesAccumulator], [expandedNodesAccumulator,algorithmExecutionsAccumulator,executionTimeAccumulator]])
+
 fig, ax = plt.subplots(2, 3, figsize=(20,10))
 for i, row in enumerate(ax):
     for j, chart in enumerate(row):
-        printBarChart(range(solvedSudokus), rowsAccumulator, chart, labels[i,j])
+        printBarChart(range(solvedSudokus), data[i,j], chart, labels[i,j])
 
 plt.show()
 
